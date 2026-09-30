@@ -1,5 +1,7 @@
 import sqlite3
 from pathlib import Path
+from datetime import date, datetime, time, timezone, timedelta
+from zoneinfo import ZoneInfo
 
 from market_api.market import TradeEvent
 
@@ -60,3 +62,38 @@ class Database:
             ).fetchone()
 
         return row[0]
+
+    def trades_for_date(self, market_date: date) -> list[sqlite3.Row]:
+        eastern = ZoneInfo("America/New_York")
+
+        start_local = datetime.combine(
+            market_date,
+            time.min,
+            tzinfo=eastern,
+        )
+
+        next_day_local = start_local + timedelta(days=1)
+
+        start_utc = start_local.astimezone(timezone.utc).isoformat()
+        next_day_utc = next_day_local.astimezone(timezone.utc).isoformat()
+
+        with self.connect() as db:
+            db.row_factory = sqlite3.Row
+
+            return db.execute(
+                """
+                SELECT
+                    event_id,
+                    sequence,
+                    event_time,
+                    schema_version,
+                    symbol,
+                    price,
+                    volume
+                FROM trades
+                WHERE event_time >= ?
+                AND event_time < ?
+                ORDER BY sequence ASC
+                """,
+                (start_utc, next_day_utc),
+            ).fetchall()
