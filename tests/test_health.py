@@ -1,22 +1,33 @@
 from decimal import Decimal
 from market_api.main import create_app
 import time
+import pytest
 
 from fastapi.testclient import TestClient
 from market_api.market import MarketEngine
+from fastapi.testclient import TestClient
+from market_api.main import create_app
 
 
-def test_health():
-    with TestClient(create_app()) as client:
-        response = client.get("/health")
+@pytest.fixture
+def client(tmp_path):
+    app = create_app(
+        database_path=tmp_path / "test-market.sqlite3"
+    )
+
+    with TestClient(app) as client:
+        yield client
+
+
+def test_health(client):
+    response = client.get("/health")
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
 
 
-def test_symbols():
-    with TestClient(create_app()) as client:
-        response = client.get("/api/v1/symbols")
+def test_symbols(client):
+    response = client.get("/api/v1/symbols")
 
     assert response.status_code == 200
     assert response.json() == {
@@ -24,9 +35,8 @@ def test_symbols():
     }
 
 
-def test_market_snapshot():
-    with TestClient(create_app()) as client:
-        response = client.get("/api/v1/market/snapshot")
+def test_market_snapshot(client):
+    response = client.get("/api/v1/market/snapshot")
 
     assert response.status_code == 200
 
@@ -43,13 +53,12 @@ def test_market_snapshot():
     }
 
 
-def test_market_moves_without_manual_tick():
-    with TestClient(create_app()) as client:
-        before = client.get("/api/v1/market/snapshot").json()
+def test_market_moves_without_manual_tick(client):
+    before = client.get("/api/v1/market/snapshot").json()
 
-        time.sleep(1.1)
+    time.sleep(1.1)
 
-        after = client.get("/api/v1/market/snapshot").json()
+    after = client.get("/api/v1/market/snapshot").json()
 
     before_market = {
         item["symbol"]: item
@@ -79,3 +88,5 @@ def test_market_publishes_trade_to_subscriber():
     assert received.sequence == 1
     assert received.symbol in {"CYDE", "IKOR", "RELL", "UIM", "RBN"}
     assert received.volume > 0
+
+

@@ -6,7 +6,10 @@ import json
 import queue
 from dataclasses import asdict
 import asyncio
+from pathlib import Path
 
+from market_api import database
+from market_api.database import Database
 from fastapi import Request, FastAPI
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -21,13 +24,22 @@ class Symbol(BaseModel):
     volume: int
 
 
-def create_app():
-    market = MarketEngine()
-    stop_event = threading.Event()
+def create_app(database_path: str | Path = Path("data") / "market.sqlite3") -> FastAPI:
+    database = Database(database_path)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        database.initialize()
+
+        market = MarketEngine(
+            database=database,
+            initial_sequence=database.latest_sequence(),
+        )
+
         app.state.market = market
+        app.state.database = database
+
+        stop_event = threading.Event()
 
         producer = threading.Thread(
             target=market.run,

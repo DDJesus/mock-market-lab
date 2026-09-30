@@ -29,12 +29,17 @@ class MarketState:
 
 
 class MarketEngine:
-    def __init__(self, seed: int | None = None):
+    
+    def __init__(
+        self,
+        seed: int | None = None,
+        database=None,
+        initial_sequence: int = 0,
+    ):
         self._rng = random.Random(seed)
+        self._database = database
+        self._sequence = initial_sequence
         self._lock = threading.Lock()
-
-        # Stream feed subscribers
-        self._sequence = 0
         self._subscribers = []
 
         self._market = {
@@ -90,6 +95,9 @@ class MarketEngine:
                 price=state.price,
                 volume=trade_volume,
             )
+            
+            if self._database is not None:
+                self._database.save_trade(event)
 
             # Copy subscribers while protected by the lock.
             subscribers = list(self._subscribers)
