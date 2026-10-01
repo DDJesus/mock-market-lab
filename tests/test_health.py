@@ -71,6 +71,20 @@ def test_market_initial_state():
     assert cyde.volume == 0
 
 
+def test_application_workers_stop_on_shutdown(tmp_path):
+    app = create_app(
+        database_path=tmp_path / "market.sqlite3",
+        batch_dir=tmp_path / "batches",
+    )
+
+    with TestClient(app):
+        assert app.state.producer_thread.is_alive()
+        assert app.state.batch_thread.is_alive()
+
+    assert not app.state.producer_thread.is_alive()
+    assert not app.state.batch_thread.is_alive()
+    
+
 def test_market_moves_without_manual_tick(client):
     before = client.get("/api/v1/market/snapshot").json()
 
@@ -106,5 +120,4 @@ def test_market_publishes_trade_to_subscriber():
     assert received.sequence == 1
     assert received.symbol in {"CYDE", "IKOR", "RELL", "UIM", "RBN"}
     assert received.volume > 0
-
 

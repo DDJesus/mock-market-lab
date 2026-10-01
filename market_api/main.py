@@ -35,6 +35,13 @@ def create_app(
     async def lifespan(app: FastAPI):
         database.initialize()
 
+        # 1. Construct the market.
+        market = MarketEngine(
+            database=database,
+            initial_sequence=database.latest_sequence(),
+        )
+
+        # 2. Construct batch components.
         batch_writer = BatchWriter(
             database=database,
             output_dir=batch_dir,
@@ -42,6 +49,8 @@ def create_app(
 
         batch_scheduler = BatchScheduler(batch_writer)
 
+        # 3. Construct shutdown signals.
+        stop_event = threading.Event()
         batch_stop_event = threading.Event()
 
         batch_publisher = BatchPublisher(
@@ -49,25 +58,7 @@ def create_app(
             stop_event=batch_stop_event,
         )
 
-        batch_thread = threading.Thread(
-            target=batch_publisher.run,
-            name="batch-publisher",
-            daemon=True,
-        )
-
-        batch_thread.start()
-
-        market = MarketEngine(
-            database=database,
-            initial_sequence=database.latest_sequence(),
-        )
-
-        app.state.market = market
-        app.state.database = database
-        app.state.batch_dir = batch_dir
-
-        stop_event = threading.Event()
-
+        # 4. Construct worker threads.
         producer = threading.Thread(
             target=market.run,
             args=(stop_event,),
@@ -76,11 +67,27 @@ def create_app(
             daemon=True,
         )
 
+        batch_thread = threading.Thread(
+            target=batch_publisher.run,
+            name="batch-publisher",
+            daemon=True,
+        )
+
+        # 5. Expose application state.
+        app.state.market = market
+        app.state.database = database
+        app.state.batch_dir = batch_dir
+        app.state.producer_thread = producer
+        app.state.batch_thread = batch_thread
+
+        # 6. Start workers.
         producer.start()
+        batch_thread.start()
 
         try:
             yield
         finally:
+            # 7. Signal both workers and wait for shutdown.
             stop_event.set()
             batch_stop_event.set()
 
