@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 from decimal import Decimal
 from contextlib import asynccontextmanager
 import threading
@@ -7,14 +7,12 @@ import queue
 from dataclasses import asdict
 import asyncio
 from pathlib import Path
+from fastapi import Request, FastAPI, HTTPException
+from fastapi.responses import StreamingResponse, FileResponse
+from pydantic import BaseModel
 
 from market_api import database
 from market_api.database import Database
-from fastapi import Request, FastAPI
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
-
-
 from market_api.market import MarketEngine
 
 
@@ -24,8 +22,12 @@ class Symbol(BaseModel):
     volume: int
 
 
-def create_app(database_path: str | Path = Path("data") / "market.sqlite3") -> FastAPI:
+def create_app(
+            database_path: str | Path = Path("data") / "market.sqlite3",
+            batch_dir: str | Path = Path("data") / "batches",
+        ) -> FastAPI:
     database = Database(database_path)
+    batch_dir = Path(batch_dir)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -38,6 +40,7 @@ def create_app(database_path: str | Path = Path("data") / "market.sqlite3") -> F
 
         app.state.market = market
         app.state.database = database
+        app.state.batch_dir = batch_dir
 
         stop_event = threading.Event()
 
@@ -102,6 +105,38 @@ def create_app(database_path: str | Path = Path("data") / "market.sqlite3") -> F
             },
         )
 
+    @app.get("/api/v1/batches")
+    async def list_batches():
+        batch_dir = app.state.batch_dir
+
+        if not batch_dir.exists():
+            return {"batches": []}
+
+        batches = sorted(
+            path.name
+            for path in batch_dir.glob("market-trades-*.csv")
+            if path.is_file()
+        )
+
+        return {"batches": batches}
+
+    @app.get("/api/v1/batches/{market_date}")
+    async def get_batch(market_date: date):
+        filename = f"market-trades-{market_date.isoformat()}.csv"
+        batch_path = app.state.batch_dir / filename
+
+        if not batch_path.is_file():
+            raise HTTPException(
+                status_code=404,
+                detail=f"No batch available for {market_date.isoformat()}",
+            )
+
+        return FileResponse(
+            path=batch_path,
+            media_type="text/csv",
+            filename=filename,
+        )
+
     @app.get("/health")
     def health():
         return {"status": "ok"}
@@ -116,7 +151,6 @@ def create_app(database_path: str | Path = Path("data") / "market.sqlite3") -> F
             "as_of": datetime.now(timezone.utc),
             "market": app.state.market.snapshot(),
         }
-
 
     return app
 

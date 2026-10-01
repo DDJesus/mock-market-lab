@@ -57,5 +57,3 @@ class BatchWriter:
                 )
 
         return output_path
-
-BatchWriter(Database("data/market.sqlite3"), "batches").write_daily_batch(date(2026, 9, 30))

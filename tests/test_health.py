@@ -46,11 +46,30 @@ def test_market_snapshot(client):
     assert len(body["market"]) == 5
 
     cyde = body["market"][0]
-    assert cyde == {
-        "symbol": "CYDE",
-        "price": Decimal("184.25"),
-        "volume": 0,
-    }
+
+    assert cyde["symbol"] == "CYDE"
+    assert Decimal(str(cyde["price"])) > 0
+    assert cyde["volume"] >= 0
+
+    assert [item["symbol"] for item in body["market"]] == [
+        "CYDE",
+        "IKOR",
+        "RELL",
+        "UIM",
+        "RBN",
+    ]
+
+
+def test_market_initial_state():
+    market = MarketEngine(seed=42)
+
+    snapshot = market.snapshot()
+
+    cyde = snapshot[0]
+
+    assert cyde.symbol == "CYDE"
+    assert cyde.price == Decimal("184.25")
+    assert cyde.volume == 0
 
 
 def test_market_moves_without_manual_tick(client):
