@@ -14,6 +14,8 @@ from pydantic import BaseModel
 from market_api import database
 from market_api.database import Database
 from market_api.market import MarketEngine
+from market_api.batch import BatchWriter
+from market_api.scheduler import BatchPublisher, BatchScheduler
 
 
 class Symbol(BaseModel):
@@ -32,6 +34,28 @@ def create_app(
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         database.initialize()
+
+        batch_writer = BatchWriter(
+            database=database,
+            output_dir=batch_dir,
+        )
+
+        batch_scheduler = BatchScheduler(batch_writer)
+
+        batch_stop_event = threading.Event()
+
+        batch_publisher = BatchPublisher(
+            scheduler=batch_scheduler,
+            stop_event=batch_stop_event,
+        )
+
+        batch_thread = threading.Thread(
+            target=batch_publisher.run,
+            name="batch-publisher",
+            daemon=True,
+        )
+
+        batch_thread.start()
 
         market = MarketEngine(
             database=database,
@@ -58,7 +82,10 @@ def create_app(
             yield
         finally:
             stop_event.set()
+            batch_stop_event.set()
+
             producer.join(timeout=2)
+            batch_thread.join(timeout=2)
 
     app = FastAPI(
         title="Mock Market Data API",

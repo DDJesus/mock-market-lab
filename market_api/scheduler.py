@@ -1,5 +1,6 @@
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
+import threading
 
 from market_api.batch import BatchWriter
 
@@ -42,3 +43,32 @@ class BatchScheduler:
             candidate += timedelta(days=1)
 
         return candidate
+
+
+class BatchPublisher:
+    def __init__(
+        self,
+        scheduler: BatchScheduler,
+        stop_event: threading.Event,
+        clock=None,
+    ):
+        self.scheduler = scheduler
+        self.stop_event = stop_event
+        self.clock = clock or (
+            lambda: datetime.now(tz=EASTERN)
+        )
+
+    def run(self):
+        while not self.stop_event.is_set():
+            now = self.clock()
+            next_run = self.scheduler.next_run_after(now)
+
+            wait_seconds = max(
+                0.0,
+                (next_run - now).total_seconds(),
+            )
+
+            if self.stop_event.wait(wait_seconds):
+                break
+
+            self.scheduler.publish_for_run(next_run)

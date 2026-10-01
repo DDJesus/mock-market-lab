@@ -1,8 +1,9 @@
 from datetime import datetime
 from unittest.mock import Mock
 from zoneinfo import ZoneInfo
+import threading
 
-from market_api.scheduler import BatchScheduler
+from market_api.scheduler import BatchScheduler, BatchPublisher
 
 
 EASTERN = ZoneInfo("America/New_York")
@@ -107,3 +108,31 @@ def test_next_run_respects_daylight_saving_time():
     assert summer_run.hour == 6
 
     assert winter_run.utcoffset() != summer_run.utcoffset()
+
+
+def test_batch_publisher_stops_cleanly():
+    writer = Mock()
+    scheduler = BatchScheduler(writer)
+    stop_event = threading.Event()
+
+    publisher = BatchPublisher(
+        scheduler=scheduler,
+        stop_event=stop_event,
+        clock=lambda: datetime(
+            2026,
+            10,
+            1,
+            8,
+            0,
+            tzinfo=EASTERN,
+        ),
+    )
+
+    thread = threading.Thread(target=publisher.run)
+    thread.start()
+
+    stop_event.set()
+    thread.join(timeout=1)
+
+    assert not thread.is_alive()
+    writer.write_daily_batch.assert_not_called()
