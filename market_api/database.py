@@ -1,4 +1,5 @@
 import sqlite3
+
 from pathlib import Path
 from datetime import date, datetime, time, timezone, timedelta
 from zoneinfo import ZoneInfo
@@ -56,6 +57,10 @@ class Database:
             )
 
     def latest_sequence(self) -> int:
+        """
+        Get the latest sequence number from the trades table.
+        Prevents duplicate sequence numbers from being inserted into the database.
+        """
         with self.connect() as db:
             row = db.execute(
                 "SELECT COALESCE(MAX(sequence), 0) FROM trades"

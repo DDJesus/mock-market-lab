@@ -1,4 +1,5 @@
 import csv
+
 from datetime import date
 from pathlib import Path
 
@@ -6,6 +7,12 @@ from market_api.database import Database
 
 
 class BatchWriter:
+    """
+    A writer for creating daily market trade batches.
+    """
+
+    # The field names for the CSV file. The order of the fields is important, as it determines the order of the columns in the CSV file.
+    # Currently dumping all fields from the database, but can be changed to a subset of fields if desired.
     FIELDNAMES = [
         "event_id",
         "sequence",
@@ -21,6 +28,13 @@ class BatchWriter:
         database: Database,
         output_dir: str | Path,
     ):
+        """
+        Initialize the BatchWriter.
+
+        Args:
+            database: The database instance. Currently using SQLite, but can be changed to a different database if desired.
+            output_dir: The directory where the batch files will be written.
+        """
         self.database = database
         self.output_dir = Path(output_dir)
 
@@ -32,6 +46,7 @@ class BatchWriter:
             exist_ok=True,
         )
 
+        # CSV output for batch
         output_path = (
             self.output_dir / f"market-trades-{market_date.isoformat()}.csv"
         )
@@ -40,7 +55,7 @@ class BatchWriter:
             "w",
             newline="",
             encoding="utf-8",
-        ) as file:
+        ) as file: 
             writer = csv.DictWriter(
                 file,
                 fieldnames=self.FIELDNAMES,

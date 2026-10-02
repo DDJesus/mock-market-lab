@@ -97,5 +97,8 @@ Download a daily batch:
 GET /api/v1/batches/{market_date}
 ```
 
+## Tests
+Currently the tests are all hardcoded to check historical files/data from the date of application creation. If testing yourself, may need to change the hardcoded values in the test files.
+
 ## Status
 The local producer side is functional and tested. The next phase is deployment as an independent service followed by development of downstream batch and streaming consumers.

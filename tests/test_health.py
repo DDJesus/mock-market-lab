@@ -1,11 +1,11 @@
-from decimal import Decimal
-from market_api.main import create_app
-import time
 import pytest
+import time
 
+from decimal import Decimal
 from fastapi.testclient import TestClient
-from market_api.market import MarketEngine
+
 from market_api.main import create_app
+from market_api.market import MarketEngine
 
 
 @pytest.fixture
@@ -83,7 +83,7 @@ def test_application_workers_stop_on_shutdown(tmp_path):
 
     assert not app.state.producer_thread.is_alive()
     assert not app.state.batch_thread.is_alive()
-    
+
 
 def test_market_moves_without_manual_tick(client):
     before = client.get("/api/v1/market/snapshot").json()

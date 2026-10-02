@@ -1,4 +1,5 @@
 import csv
+
 from datetime import date
 from decimal import Decimal
 
@@ -8,6 +9,12 @@ from market_api.market import TradeEvent
 
 
 def test_daily_batch_contains_canonical_trades(tmp_path):
+    """
+    Test that the daily batch contains the expected canonical trades.
+    Currently looks at date of application creation for testing, but can be changed to a different date if desired.
+    May run in to issues where batch files are deleted after a certain amount of time, 
+    so may need to change the date to a different date if this test fails.
+    """
     database = Database(tmp_path / "market.sqlite3")
     database.initialize()
 
@@ -18,7 +25,7 @@ def test_daily_batch_contains_canonical_trades(tmp_path):
             sequence=1,
             event_time="2026-09-30T14:00:00+00:00",
             symbol="CYDE",
-            price=Decimal("184.25"),
+            price=Decimal("184.25"),  # We're forcing decimal to be used for price, so we need to use Decimal here as well.
             volume=700,
         ),
         TradeEvent(

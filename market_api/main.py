@@ -1,17 +1,17 @@
-from datetime import datetime, timezone, date
-from decimal import Decimal
-from contextlib import asynccontextmanager
-import threading
+import asyncio
 import json
 import queue
+import threading
+
+from contextlib import asynccontextmanager
+from datetime import datetime, timezone, date
 from dataclasses import asdict
-import asyncio
-from pathlib import Path
+from decimal import Decimal
 from fastapi import Request, FastAPI, HTTPException
 from fastapi.responses import StreamingResponse, FileResponse
+from pathlib import Path
 from pydantic import BaseModel
 
-from market_api import database
 from market_api.database import Database
 from market_api.market import MarketEngine
 from market_api.batch import BatchWriter
@@ -28,20 +28,27 @@ def create_app(
             database_path: str | Path = Path("data") / "market.sqlite3",
             batch_dir: str | Path = Path("data") / "batches",
         ) -> FastAPI:
+    """
+    Create a FastAPI application for the mock market data API.
+
+    :param database_path: The path to the SQLite database file. Can be changed to a different database if desired.
+    :param batch_dir: The directory where batch files will be stored.
+    """
     database = Database(database_path)
     batch_dir = Path(batch_dir)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        database.initialize()
 
-        # 1. Construct the market.
+        database.initialize()  # 1. Initialize the database, creating the trades table if it doesn't exist.
+
+        # Construct the market.
         market = MarketEngine(
             database=database,
             initial_sequence=database.latest_sequence(),
         )
 
-        # 2. Construct batch components.
+        # Construct batch components.
         batch_writer = BatchWriter(
             database=database,
             output_dir=batch_dir,
@@ -49,7 +56,7 @@ def create_app(
 
         batch_scheduler = BatchScheduler(batch_writer)
 
-        # 3. Construct shutdown signals.
+        # Construct shutdown signals.
         stop_event = threading.Event()
         batch_stop_event = threading.Event()
 
@@ -58,7 +65,7 @@ def create_app(
             stop_event=batch_stop_event,
         )
 
-        # 4. Construct worker threads.
+        # Construct worker threads.
         producer = threading.Thread(
             target=market.run,
             args=(stop_event,),
@@ -67,27 +74,28 @@ def create_app(
             daemon=True,
         )
 
+        # Construct batch publisher thread.
         batch_thread = threading.Thread(
             target=batch_publisher.run,
             name="batch-publisher",
             daemon=True,
         )
 
-        # 5. Expose application state.
+        # Expose application state.
         app.state.market = market
         app.state.database = database
         app.state.batch_dir = batch_dir
         app.state.producer_thread = producer
         app.state.batch_thread = batch_thread
 
-        # 6. Start workers.
+        # Start workers.
         producer.start()
         batch_thread.start()
 
         try:
             yield
         finally:
-            # 7. Signal both workers and wait for shutdown.
+            # Signal both workers and wait for shutdown.
             stop_event.set()
             batch_stop_event.set()
 
@@ -102,6 +110,9 @@ def create_app(
 
     @app.get("/api/v1/stream")
     async def stream(request: Request):
+        """
+        Stream trade events in real-time.
+        """
         subscriber = app.state.market.subscribe()
 
         async def event_generator():
@@ -141,6 +152,9 @@ def create_app(
 
     @app.get("/api/v1/batches")
     async def list_batches():
+        """
+        List all available batch files. Batch files are generated daily and can be accessed at /api/v1/batches/{market_date}.
+        """
         batch_dir = app.state.batch_dir
 
         if not batch_dir.exists():
@@ -156,6 +170,9 @@ def create_app(
 
     @app.get("/api/v1/batches/{market_date}")
     async def get_batch(market_date: date):
+        """
+        Retrieve a specific batch file.
+        """
         filename = f"market-trades-{market_date.isoformat()}.csv"
         batch_path = app.state.batch_dir / filename
 

@@ -1,7 +1,8 @@
+import threading
+
 from datetime import datetime
 from unittest.mock import Mock
 from zoneinfo import ZoneInfo
-import threading
 
 from market_api.scheduler import BatchScheduler, BatchPublisher
 

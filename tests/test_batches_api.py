@@ -1,6 +1,5 @@
-import csv
-
 import pytest
+
 from fastapi.testclient import TestClient
 
 from market_api.main import create_app

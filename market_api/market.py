@@ -1,10 +1,11 @@
-from dataclasses import dataclass
-from decimal import Decimal, ROUND_HALF_UP
+import queue
 import random
 import threading
+
+from dataclasses import dataclass
 from datetime import datetime, timezone
+from decimal import Decimal, ROUND_HALF_UP
 from uuid import uuid4
-import queue
 
 
 CENT = Decimal("0.01")
@@ -36,12 +37,23 @@ class MarketEngine:
         database=None,
         initial_sequence: int = 0,
     ):
+        """
+        Initialize the MarketEngine.
+
+        Args:
+            seed: The random seed for generating trade events.
+            database: The database instance for saving trade events.
+            initial_sequence: The initial sequence number for trade events.
+        """
+
         self._rng = random.Random(seed)
         self._database = database
         self._sequence = initial_sequence
         self._lock = threading.Lock()
         self._subscribers = []
 
+        # Since this is a mock market, we can define a fixed set of symbols and their initial prices. 
+        # In a real market, these would be dynamic. 
         self._market = {
             "CYDE": MarketState("CYDE", Decimal("184.25")),
             "IKOR": MarketState("IKOR", Decimal("327.80")),
@@ -65,6 +77,12 @@ class MarketEngine:
             ]
 
     def tick(self) -> TradeEvent:
+        """
+        Generate a new trade event. Used to simulate market activity.
+
+        Returns:
+            The generated trade event.
+        """
         with self._lock:
             state = self._rng.choice(list(self._market.values()))
 
